@@ -1,8 +1,10 @@
-# prob-computing
+# Probabilistic Path Finder
+
+The goal is to model a path finding problem in a way that can be solved with an energy-based model. From our knowledge there's no such formulation out.
 
 Solving a 2D maze with an energy-based model, sampled by block Gibbs with [THRML](https://pypi.org/project/thrml/) (Extropic's probabilistic-computing simulator).
 
-(A* version is avaialble at maze_solver_astar.ipynb. Not exhaustively tested)
+(**IMPORTANT**: *A star version* (with heuristic on the bias) is available in the maze_solver_astar.ipynb. Not exhaustively tested, but works better thanks to faster convergence to low energy solutions thanks to the euristic on the bias based on the L2 distance from start and end for each node, pushing towards the path state P based on closeness.)
 
 Each maze cell is a 3-state categorical variable (Path / NotPath / Wall). The maze is encoded entirely in the energy: per-node biases pin walls and goals, and a local degree factor rewards valid path geometry, sampled via a 5-color two-hop block scheme.
 
