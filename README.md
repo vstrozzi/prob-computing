@@ -1,4 +1,4 @@
-# Probabilistic Path Finder
+# Energy-based Maze Path Finder Formulation (+ A Star formulation)
 
 The goal is to model a path finding problem in a way that can be solved with an energy-based model. From our knowledge there's no such a similar formulation, so we explored a way that could benefit from the Library, and indirectly from the HW implemention.
 
