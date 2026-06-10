@@ -2,8 +2,7 @@
 
 The maze grid is a (2H+1, 2W+1) numpy array of 0/1 (1 = wall) whose outer
 ring is wall except for the start/end openings. Every cell, walls included,
-becomes one 3-state CategoricalNode. The 4-neighbor grid graph is bipartite
-(checkerboard), giving the two update blocks.
+becomes one 3-state CategoricalNode.
 """
 
 from dataclasses import dataclass
@@ -42,42 +41,45 @@ class MazeGraph:
     coords: list                      # (row, col) per node, row-major scan order
     nodes: list                       # CategoricalNode per cell, parallel to coords
     coord_to_node: dict
-    blocks: list                      # the two bipartite Blocks [even, odd]
-    edges: np.ndarray                 # (n_edges, 2) node indices, u before v in scan order
-    biases: np.ndarray                # (n_nodes, 3), border padding folded in
-    edge_weights: np.ndarray          # (3, 3) matrix applied per edge as W[s_u, s_v]
+    blocks: list                      # Gibbs update Blocks
+    biases: np.ndarray                # (n_nodes, 3)
 
     def state_to_grid(self, state):
         """Reshape a flat per-node state vector (parallel to nodes) to grid shape."""
         return np.asarray(state).reshape(self.grid.shape)
 
 
+def _make_blocks(coords, coord_to_node, block_scheme):
+    if block_scheme == "checkerboard":
+        n_blocks = 2
+        color = lambda r, c: (r + c) % 2
+    elif block_scheme == "two_hop":
+        # A radius-1 degree factor touches N/S/E/W neighbors, which are up to
+        # two grid hops apart. This 5-coloring separates every node in that
+        # local cross into a distinct Gibbs block.
+        n_blocks = 5
+        color = lambda r, c: (r + 2 * c) % 5
+    else:
+        raise ValueError("block_scheme must be 'checkerboard' or 'two_hop'")
+
+    return [
+        Block([coord_to_node[(r, c)] for (r, c) in coords if color(r, c) == block])
+        for block in range(n_blocks)
+    ]
+
+
 def maze_to_graph(grid, start, end,
                   bias_wall=config.BIAS_WALL,
                   bias_goal=config.BIAS_GOAL,
                   bias_other=config.BIAS_OTHER,
-                  edge_weights=config.EDGE_WEIGHTS):
+                  block_scheme="two_hop"):
     """Map a maze grid to a MazeGraph ready for THRML sampling."""
     n_rows, n_cols = grid.shape
     coords = [(r, c) for r in range(n_rows) for c in range(n_cols)]
     nodes = [CategoricalNode() for _ in coords]
     coord_to_node = dict(zip(coords, nodes))
-    index = {coord: i for i, coord in enumerate(coords)}
 
-    # Checkerboard 2-coloring: no two adjacent cells share a block.
-    blocks = [
-        Block([coord_to_node[(r, c)] for (r, c) in coords if (r + c) % 2 == parity])
-        for parity in (0, 1)
-    ]
-
-    # Edges oriented u -> v with u earlier in scan order (right and down neighbors).
-    edges = []
-    for (r, c) in coords:
-        if c + 1 < n_cols:
-            edges.append((index[(r, c)], index[(r, c + 1)]))
-        if r + 1 < n_rows:
-            edges.append((index[(r, c)], index[(r + 1, c)]))
-    edges = np.array(edges, dtype=int)
+    blocks = _make_blocks(coords, coord_to_node, block_scheme)
 
     # Per-node bias by cell type.
     biases = np.empty((len(coords), config.N_STATES))
@@ -89,17 +91,5 @@ def maze_to_graph(grid, start, end,
         else:
             biases[i] = bias_other
 
-    # Border padding: every off-grid neighbor counts as a Wall, folded into the
-    # bias with the same scan-order orientation as real edges. A missing right
-    # or down neighbor contributes W[s, WALL]; a missing left or up neighbor
-    # contributes W[WALL, s].
-    edge_weights = np.asarray(edge_weights)
-    for i, (r, c) in enumerate(coords):
-        n_after = (c + 1 >= n_cols) + (r + 1 >= n_rows)    # node is u, pad is v
-        n_before = (c - 1 < 0) + (r - 1 < 0)               # pad is u, node is v
-        biases[i] += n_after * edge_weights[:, config.WALL]
-        biases[i] += n_before * edge_weights[config.WALL, :]
-
     return MazeGraph(grid=grid, start=start, end=end, coords=coords, nodes=nodes,
-                     coord_to_node=coord_to_node, blocks=blocks, edges=edges,
-                     biases=biases, edge_weights=edge_weights)
+                     coord_to_node=coord_to_node, blocks=blocks, biases=biases)
