@@ -1,6 +1,6 @@
 # Probabilistic Path Finder
 
-The goal is to model a path finding problem in a way that can be solved with an energy-based model. From our knowledge there's no such formulation out.
+The goal is to model a path finding problem in a way that can be solved with an energy-based model. From our knowledge there's no such a similar formulation, so we explored a way that could benefit from the Library, and indirectly from the HW implemention.
 
 Solving a 2D maze with an energy-based model, sampled by block Gibbs with [THRML](https://pypi.org/project/thrml/) (Extropic's probabilistic-computing simulator).
 
