@@ -7,6 +7,23 @@ Each maze cell is a 3-state categorical variable (Path / NotPath / Wall). The ma
 encoded entirely in the energy: per-node biases pin walls and goals, and a local degree factor 
 rewards valid path geometry, sampled via a 5-color two-hop block scheme.
 
+## Mathematical Formulation & THRML Integration
+
+The maze routing problem is formally mapped into the THRML framework as follows:
+
+1. **State Space Formalism**: The maze is a graph $G = (V, E)$, where each cell $i \in V$ holds a categorical random variable $x_i \in \{P, N, W\}$ (Path, NotPath, Wall).
+2. **Target Distribution**: THRML samples from a Boltzmann distribution. The energy $E(x)$ of a state $x$ is defined as $-\beta S(x)$, where $S(x)$ is the score:
+   $$ S(x) = \sum_{i \in V} b_i[x_i] + \sum_{i \in V} D_i(x_i, x_{\mathcal{N}(i)}) $$
+3. **THRML Factors**:
+   - **Bias Factor ($b_i$)**: A 1D tensor that enforces static boundaries:
+     $$ b_i = \begin{cases} [-8,-8,12] & \text{if cell } i \text{ is a Wall} \\ [5,-8,-8] & \text{if } i \in \{\text{Start}, \text{End}\} \\ [0,0,-8] & \text{otherwise} \end{cases} $$
+   - **Degree Factor ($D_i$)**: An N-dimensional tensor evaluating a cell and its neighbors ($\mathcal{N}(i)$) simultaneously. Let $d_i(x) = \sum_{j \in \mathcal{N}(i)} \mathbf{1}[x_j = P]$. The tensor assigns a score:
+     $$ D_i = \begin{cases} r_P & \text{if } x_i = P \text{ and } d_i = 1 \text{ (on Start/End goal)} \\ r_P & \text{if } x_i = P \text{ and } d_i = 2 \text{ (valid path segment)} \\ r_N & \text{if } x_i = N \text{ and } d_i \le 1 \text{ (valid empty space)} \\ -\lambda & \text{otherwise (penalizes dead-ends or branches)} \end{cases} $$
+4. **Block Gibbs Execution**: Because the factor $D_i$ evaluates 5 dependent variables simultaneously, they cannot be updated at the same time. The grid is partitioned into 5 independent blocks, computed explicitly by the grouping assignment: 
+   $$ \text{Color}(r, c) = (r + 2c) \pmod 5 $$
+   This "two-hop" scheme ensures cells within the same factor are never in the same block. THRML freezes 4 blocks and evaluates the multi-dimensional tensor lookups for the active block natively in parallel.
+5. **Output**: We select the sampled state with the absolute lowest explicit energy $E(x)$, which traces the valid, minimal penalty route from Start to End.
+
 ## Layout
 
 - `maze_solution_comparison.ipynb` — modeling the maze route using degree factors.
