@@ -56,7 +56,8 @@ def maze_to_graph(grid, start, end,
                   bias_wall=config.BIAS_WALL,
                   bias_goal=config.BIAS_GOAL,
                   bias_other=config.BIAS_OTHER,
-                  edge_weights=config.EDGE_WEIGHTS):
+                  edge_weights=config.EDGE_WEIGHTS,
+                  block_scheme='checkerboard'):
     """Map a maze grid to a MazeGraph ready for THRML sampling."""
     n_rows, n_cols = grid.shape
     coords = [(r, c) for r in range(n_rows) for c in range(n_cols)]
@@ -64,11 +65,18 @@ def maze_to_graph(grid, start, end,
     coord_to_node = dict(zip(coords, nodes))
     index = {coord: i for i, coord in enumerate(coords)}
 
-    # Checkerboard 2-coloring: no two adjacent cells share a block.
-    blocks = [
-        Block([coord_to_node[(r, c)] for (r, c) in coords if (r + c) % 2 == parity])
-        for parity in (0, 1)
-    ]
+    if block_scheme == 'two_hop':
+        # 5-coloring: no two cells within Manhattan distance 2 share a block.
+        blocks = [
+            Block([coord_to_node[(r, c)] for (r, c) in coords if (r + 2 * c) % 5 == color])
+            for color in range(5)
+        ]
+    else:
+        # Checkerboard 2-coloring: no two adjacent cells share a block.
+        blocks = [
+            Block([coord_to_node[(r, c)] for (r, c) in coords if (r + c) % 2 == parity])
+            for parity in (0, 1)
+        ]
 
     # Edges oriented u -> v with u earlier in scan order (right and down neighbors).
     edges = []
